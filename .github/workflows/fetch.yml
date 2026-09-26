@@ -1,0 +1,32 @@
+name: fetch
+on:
+  schedule:
+    - cron: "30 1 * * *"   # 08:30 Asia/Bangkok
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: fetch sources
+        run: python3 fetch_sources.py
+      - name: commit
+        run: |
+          git config user.name "watch-kb bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add latest.md latest.json daily/
+          git diff --cached --quiet || git commit -m "data: $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
+      - name: notify
+        if: always()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -f brief.txt ]; then msg="$(cat brief.txt)"; prio=default; else msg="watch-kb: fetch ล้มเหลว ดู Actions log"; prio=high; fi
+          curl -fsS -o /dev/null -H "Title: watch-kb $(TZ=Asia/Bangkok date +%d/%m\ %H:%M)" -H "Priority: $prio" -H "Tags: ocean" \
+            -d "$msg" "https://ntfy.sh/$NTFY_TOPIC"
